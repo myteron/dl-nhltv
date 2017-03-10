@@ -7,25 +7,21 @@ class Team(object):
     def __str__(self):
         return str(self.__dict__)
 
-class NhlTv(object):
+class NhlTvTeams(object):
     """Parsing NHL TV """
     team = Team()
     teams = {}
     
     def parseTeam(self,team):    
         t = Team()
-        t.shortName = team["teamName"] 
-        t.fullName = team["name"] 
-        t.id = team["id"]
-        t.abbreviation = team["abbreviation"]
+        t.fullName = team["Team"]
+        t.id = int(team["Id"])
+        t.abbreviation = team["TriCode"]
         self.teams[t.abbreviation]=t
         
-    def parseGameContentSchedule(self, schedule):
-
-        for dates in schedule["dates"]:
-            for games in dates["games"]:
-                self.parseTeam(games["teams"]["home"]["team"])
-                self.parseTeam(games["teams"]["away"]["team"])
+    def parseGameContentSchedule(self, tree):
+        for item in tree.iter("Standing"):
+            self.parseTeam(item.attrib)
                 
     def getTeam(self, search):
         if isinstance(search, int):
