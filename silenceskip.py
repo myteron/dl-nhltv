@@ -1,6 +1,8 @@
-from globals import *
-import subprocess
 import re 
+import subprocess
+
+from globals import *
+
 
 def silenceSkip(input, output):
     tprint("Analyzing " + input + " for silence.")

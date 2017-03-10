@@ -1,10 +1,11 @@
+from datetime import timedelta
+import time
+import urllib
+import urllib2
+
+from download_nhl import download_nhl
 from globals import *
 from silenceskip import silenceSkip
-from download_nhl import download_nhl
-from datetime import timedelta
-import urllib2
-import urllib
-import time
 
 
 def createFullGameStream(stream_url, media_auth):
@@ -100,9 +101,9 @@ def fetchStream(game_id, content_id, event_id):
             stream_url = json_source['user_verified_event'][0]['user_verified_content'][0]['user_verified_media_item'][0]['url']    
             media_auth = str(json_source['session_info']['sessionAttributes'][0]['attributeName']) + "=" + str(json_source['session_info']['sessionAttributes'][0]['attributeValue'])
             session_key = json_source['session_key']
-            setSetting(sid='media_auth', value=media_auth) 
+            setSetting('media_auth', media_auth)
             #Update Session Key
-            setSetting(sid='session_key', value=session_key)   
+            setSetting('session_key', session_key)
     else:
         msg = json_source['status_message']
         tprint(msg)     
@@ -125,14 +126,14 @@ def getGameInfo(json_source=json):
     ==================================================
     Game info for file prefix like 2017-03-06_VAN-ANA 
     ==================================================
-    
+
     Arguments:
         json_source (json): The first parameter.
 
     Returns:
         str: game info string like 2017-03-06_VAN-ANA
     """
-    
+
     game_info = json_source['user_verified_event'][0]['user_verified_content'][0]['name'].replace(":","|") 
     game_time, game_teams, _ = game_info.split(" | ")
     game_teams = game_teams.split()[0] + "-" + game_teams.split()[2]
@@ -141,7 +142,7 @@ def getGameInfo(json_source=json):
 
 def getSessionKey(game_id,event_id,content_id,authorization):    
 
-    session_key = str(getSetting(sid="session_key"))
+    session_key = str(getSetting("session_key"))
 
     if session_key == '':
         tprint("need to fetch new session key")
@@ -176,7 +177,7 @@ def getSessionKey(game_id,event_id,content_id,authorization):
                 tprint(msg)
                 return 'blackout'
         session_key = str(json_source['session_key'])
-        setSetting(sid='session_key', value=session_key)                              
+        setSetting('session_key', session_key)                              
 
     return session_key  
     
@@ -272,7 +273,7 @@ def logout(display_msg=None):
     response.close()
 
     if display_msg == 'true':
-        setSetting(sid='session_key', value='') 
+        setSetting('session_key', value='') 
 
 def getGameId():
     current_time = datetime.now()
