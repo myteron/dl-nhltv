@@ -19,7 +19,7 @@ from nhltv import NhlTvTeams
 class TestNhlTvTeams(unittest.TestCase):
     """ 
     To run this do the following from anywhere in the project:
-    python -m unittest discover
+    python -m unittest discover -v
     """
     nhlTeams = NhlTvTeams();
     teams = ""
@@ -31,8 +31,6 @@ class TestNhlTvTeams(unittest.TestCase):
     def test_getTeamFullNameByAbbreviation(self):
         self.assertEqual(self.nhlTeams.getTeam("DET").fullName, "Detroit Red Wings")
 
-    def test_getTeamShortNameByAbbreviation(self):
-        self.assertEqual(self.nhlTeams.getTeam("DET").shortName, "Red Wings")
 
     def test_getTeamIdByAbbreviation(self):
         self.assertEqual(self.nhlTeams.getTeam("DET").id, 17, "expected team id 17")
