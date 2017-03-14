@@ -1,12 +1,13 @@
-from datetime import timedelta
-import time
-import urllib
-import urllib2
-
-from download_nhl import download_nhl
 from globals import *
 from silenceskip import silenceSkip
+from download_nhl import download_nhl
+from datetime import timedelta
+import urllib2
+import urllib
+import time
+import os.path
 
+from fileinput import filename
 
 def createFullGameStream(stream_url, media_auth):
     #SD (800 kbps)|SD (1600 kbps)|HD (3000 kbps)|HD (5000 kbps)        
@@ -31,13 +32,13 @@ def createFullGameStream(stream_url, media_auth):
 def getAuthCookie():
     authorization = ''    
     try:
-        cj = cookielib.LWPCookieJar('cookies.lwp')
-        cj.load('cookies.lwp',ignore_discard=True)    
+        cj = cookielib.LWPCookieJar(COOKIES_LWP_FILE)
+        cj.load(COOKIES_LWP_FILE,ignore_discard=True)
 
         #If authorization cookie is missing or stale, perform login    
         for cookie in cj:            
             if cookie.name == "Authorization" and not cookie.is_expired():            
-                authorization = cookie.value 
+                authorization = cookie.value
     except:
         pass
 
@@ -49,15 +50,16 @@ def fetchStream(game_id, content_id, event_id):
     media_auth = ''    
    
     authorization = getAuthCookie()            
+
     
     if authorization == '':  
         login()
         authorization = getAuthCookie()   
         if authorization == '':
-            return stream_url, media_auth
+            return stream_url, media_auth, ""
 
-    cj = cookielib.LWPCookieJar('cookies.lwp') 
-    cj.load('cookies.lwp',ignore_discard=True) 
+    cj = cookielib.LWPCookieJar(COOKIES_LWP_FILE)
+    cj.load(COOKIES_LWP_FILE,ignore_discard=True)
     
     tprint("Fetching session_key")        
     session_key = getSessionKey(game_id,event_id,content_id,authorization)    
@@ -65,12 +67,12 @@ def fetchStream(game_id, content_id, event_id):
         
     tprint("Checking session key")
     if session_key == '':
-        return stream_url, media_auth
+        return stream_url, media_auth, ""
 
-    elif session_key == 'blackout':
+    if "blackout" in session_key:
         msg = "The game you are trying to access is not currently available due to local or national blackout restrictions.\n Full game archives will be available 48 hours after completion of this game."
         tprint(msg)
-        return stream_url, media_auth
+        return stream_url, media_auth, ""
 
     #Org
     url = 'https://mf.svc.nhl.com/ws/media/mf/v2.4/stream?contentId='+content_id+'&playbackScenario=HTTP_CLOUD_TABLET_60&platform=IPAD&sessionKey='+urllib.quote_plus(session_key)    
@@ -87,6 +89,10 @@ def fetchStream(game_id, content_id, event_id):
     json_source = json.load(response)       
     response.close()
 
+    # Pulling out game_info in formated like "2017-03-06_VAN-ANA" for file name prefix
+    game_info = getGameInfo(json_source)
+    tprint("game info=" + game_info)
+
     # Expecting - values to always be bad i.e.: -3500 is Sign-on restriction: Too many usage attempts
     if json_source['status_code'] < 0:
         tprint(json_source['status_message'])
@@ -97,25 +103,22 @@ def fetchStream(game_id, content_id, event_id):
         if json_source['user_verified_event'][0]['user_verified_content'][0]['user_verified_media_item'][0]['blackout_status']['status'] == 'BlackedOutStatus':
             msg = "You do not have access to view this content. To watch live games and learn more about blackout restrictions, please visit NHL.TV"
             tprint(msg)
-        else:
-            stream_url = json_source['user_verified_event'][0]['user_verified_content'][0]['user_verified_media_item'][0]['url']    
-            media_auth = str(json_source['session_info']['sessionAttributes'][0]['attributeName']) + "=" + str(json_source['session_info']['sessionAttributes'][0]['attributeValue'])
-            session_key = json_source['session_key']
-            setSetting('media_auth', media_auth)
-            #Update Session Key
-            setSetting('session_key', session_key)
-    else:
-        msg = json_source['status_message']
-        tprint(msg)     
+            # TODO: go into wait loop here. For now we exit gracefully
+            exit(1)
+            # return stream_url, media_auth, ""
+
+    stream_url = json_source['user_verified_event'][0]['user_verified_content'][0]['user_verified_media_item'][0]['url']
+    media_auth = str(json_source['session_info']['sessionAttributes'][0]['attributeName']) + "=" + str(json_source['session_info']['sessionAttributes'][0]['attributeValue'])
+    session_key = json_source['session_key']
+    setSetting(sid='media_auth', value=media_auth)
+    #Update Session Key
+    setSetting(sid='session_key', value=session_key)
     
-    # Pulling out game_info in formated like "2017-03-06_VAN-ANA" for file name prefix
-    game_info = getGameInfo(json_source)
-    tprint("game info=" + game_info)
 
     # Add media_auth cookie
     ck = cookielib.Cookie(version=0, name='mediaAuth', value="" + media_auth.replace('mediaAuth=','') + "", port=None, port_specified=False, domain='.nhl.com', domain_specified=True, domain_initial_dot=True, path='/', path_specified=True, secure=False, expires=(int(time.time()) + 7500), discard=False, comment=None, comment_url=None, rest={}, rfc2109=False)
-    cj = cookielib.LWPCookieJar('cookies.lwp')
-    cj.load('cookies.lwp',ignore_discard=True)
+    cj = cookielib.LWPCookieJar(COOKIES_LWP_FILE)
+    cj.load(COOKIES_LWP_FILE,ignore_discard=True)
     cj.set_cookie(ck)
     cj.save(ignore_discard=False)
 
@@ -126,14 +129,14 @@ def getGameInfo(json_source=json):
     ==================================================
     Game info for file prefix like 2017-03-06_VAN-ANA 
     ==================================================
-
+    
     Arguments:
         json_source (json): The first parameter.
 
     Returns:
         str: game info string like 2017-03-06_VAN-ANA
     """
-
+    
     game_info = json_source['user_verified_event'][0]['user_verified_content'][0]['name'].replace(":","|") 
     game_time, game_teams, _ = game_info.split(" | ")
     game_teams = game_teams.split()[0] + "-" + game_teams.split()[2]
@@ -142,7 +145,7 @@ def getGameInfo(json_source=json):
 
 def getSessionKey(game_id,event_id,content_id,authorization):    
 
-    session_key = str(getSetting("session_key"))
+    session_key = str(getSetting(sid="session_key"))
 
     if session_key == '':
         tprint("need to fetch new session key")
@@ -177,7 +180,7 @@ def getSessionKey(game_id,event_id,content_id,authorization):
                 tprint(msg)
                 return 'blackout'
         session_key = str(json_source['session_key'])
-        setSetting('session_key', session_key)                              
+        setSetting(sid='session_key', value=session_key)                              
 
     return session_key  
     
@@ -188,11 +191,11 @@ def login():
     global PASSWORD
    
     if USERNAME != '' and PASSWORD != '':        
-        cj = cookielib.LWPCookieJar('cookies.lwp') 
+        cj = cookielib.LWPCookieJar(COOKIES_LWP_FILE)
         opener = urllib2.build_opener(urllib2.HTTPCookieProcessor(cj))   
 
         try:
-            cj.load('cookies.lwp',ignore_discard=True)
+            cj.load(COOKIES_LWP_FILE,ignore_discard=True)
         except:
             pass
 
@@ -241,13 +244,13 @@ def login():
                 tprint(msg)
 
         response.close()
-        cj.save(ignore_discard=True); 
+        cj.save(ignore_discard=True);
 
 
 def logout(display_msg=None):    
-    cj = cookielib.LWPCookieJar('cookies.lwp')   
+    cj = cookielib.LWPCookieJar(COOKIES_LWP_FILE)
     try:  
-        cj.load('cookies.lwp',ignore_discard=True)
+        cj.load(COOKIES_LWP_FILE,ignore_discard=True)
     except:
         pass
         
@@ -273,7 +276,7 @@ def logout(display_msg=None):
     response.close()
 
     if display_msg == 'true':
-        setSetting('session_key', value='') 
+        setSetting(sid='session_key', value='') 
 
 def getGameId():
     current_time = datetime.now()
@@ -410,12 +413,30 @@ def reEncode(inputFile, outputFile):
     command = 'rm ' + outputFile + '.mkv'
     subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, shell=True)
 
+def touch(fname):
+    with open(fname, 'w'):
+        pass
 
+def createSettingsFile(fname):
+    with open(fname, "w") as settingsFile:
+        jstring = """{
+    "session_key": "000",
+    "media_auth": "mediaAuth=000",
+    "lastGameID": 2015030166
+}"""
+        j = json.loads(jstring)
+        json.dump(j, settingsFile, indent=4)
+
+def createMandatoryFiles():
+    if not os.path.isfile(COOKIES_LWP_FILE): touch(COOKIES_LWP_FILE)
+    if not os.path.isfile(COOKIES_TXT_FILE): touch(COOKIES_TXT_FILE)
+    if not os.path.isfile(SETTINGS_FILE): createSettingsFile(SETTINGS_FILE)
 
 #-----------------------------MAIN CODE--------------------#    
 # Find the gameID or wait until one is ready
 
 while(True):
+    createMandatoryFiles()
     gameID = None
     while(gameID == None):
         gameID, contentID, eventID = getGameId()
