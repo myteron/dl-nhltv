@@ -1,3 +1,5 @@
+import urllib2
+import xml.etree.ElementTree as ET
 
 
 class Team(object):
@@ -9,7 +11,7 @@ class Team(object):
         return str(self.__dict__)
 
 
-class NhlTvTeams(object):
+class Teams(object):
     """
     ==================================================
     Get NHL TV Team names
@@ -25,15 +27,29 @@ class NhlTvTeams(object):
     team = Team()
     teams = {}
 
+    def __init__(self):
+        UA_PS4 = 'PS4Application libhttp/1.000 (PS4) libhttp/3.15 (PlayStation 4)'
+
+        url = 'http://app.cgy.nhl.yinzcam.com/V2/Stats/Standings'
+        print('Checking Team...')
+        req = urllib2.Request(url)
+        req.add_header('Connection', 'close')
+        req.add_header('User-Agent', UA_PS4)
+        response = urllib2.urlopen(req)
+        xml = response.read().decode('utf-8-sig')
+        self._parseGameContentSchedule(ET.fromstring(xml))
+        response.close()
+
     def parseTeam(self, team):
         # TODO: this shall be replace by a pull during object init
+
         t = Team()
         t.fullName = team["Team"]
         t.id = int(team["Id"])
         t.abbreviation = team["TriCode"]
         self.teams[t.abbreviation] = t
 
-    def parseGameContentSchedule(self, tree):
+    def _parseGameContentSchedule(self, tree):
         for item in tree.iter("Standing"):
             self.parseTeam(item.attrib)
 
